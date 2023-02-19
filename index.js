@@ -1,5 +1,10 @@
 import express from "express";
 import ytdl from "ytdl-core";
+import { PassThrough } from "stream";
+import ffmpeg from "fluent-ffmpeg";
+
+const useHttps = false;
+const port = 3000;
 
 const app = express();
 
@@ -10,6 +15,9 @@ app.get("/download", async (req, res) => {
     videoId = videoIdArray[1];
   } else if (videoId.includes("&v=")) {
     const videoIdArray = videoId.split("&v=");
+    videoId = videoIdArray[1];
+  } else if (videoId.includes(".be/")) {
+    const videoIdArray = videoId.split(".be/");
     videoId = videoIdArray[1];
   }
 
@@ -30,7 +38,10 @@ app.get("/download", async (req, res) => {
 
   try {
     videoInfo = await ytdl.getInfo(videoUrl);
-    videoTitle = videoInfo.videoDetails.title;
+    videoTitle = videoInfo.videoDetails.title.replace(/[<>:"/\\|?*]/g, "");
+    console.log(
+      `Downloading ${videoUrl} (${videoId}) with title ${videoTitle}...`
+    );
   } catch (error) {
     console.log(error);
     return res.status(500, "Internal Server Error");
@@ -41,23 +52,47 @@ app.get("/download", async (req, res) => {
 
   try {
     switch (format) {
+      // MP3
       case "mp3":
+        let audioStream = new PassThrough();
+
         res.header("Content-Disposition", `attachment; filename="${filename}"`);
-        ytdl(videoUrl, {
-          format: "mp3",
-          filter: "audioonly",
-        }).pipe(res);
+        res.header("Content-Type", "audio/mpeg");
+
+        ffmpeg(ytdl(videoUrl, { filter: "audioonly", quality: "highest" }))
+          .audioBitrate(128)
+          .audioChannels(2)
+          .audioCodec("libmp3lame")
+          .format("mp3")
+          .on("error", (err) => {
+            console.log(err);
+            return res.status(500, "Internal Server Error");
+          })
+          .on("end", () => {
+            console.log("Finished");
+          })
+          .on("progress", (progress) => {
+            console.log(progress.timemark);
+          })
+          .pipe(audioStream, { end: true });
+        audioStream.pipe(res);
         break;
+
+      // MP4
       case "mp4":
+        let videoStream = new PassThrough();
+
         res.header("Content-Disposition", `attachment; filename="${filename}"`);
-        ytdl(videoUrl, {
-          format: "mp4",
-          quality: "highest",
-        }).pipe(res);
+        ytdl(videoUrl, { quality: "highest" })
+          .on("progress", (chunkLength, downloaded, total) => {
+            const percent = downloaded / total;
+            console.log(Math.floor(percent * 100) + "%");
+          })
+          .pipe(videoStream, { end: true });
+        videoStream.pipe(res);
         break;
       default:
         return res.status(404, "Video not found");
-        break;
     }
   } catch (error) {
     return res.status(404, "Video not found");
@@ -143,6 +178,27 @@ app.get("/", (req, res) => {
 `);
 });
 
-app.listen(3000, () => {
-  console.log("Listening on http://127.0.0.1:3000");
-});
+if (useHttps) {
+  const https = import("https");
+  const fs = import("fs");
+
+  const options = {
+    key: fs.readFileSync("key.pem"),
+    cert: fs.readFileSync("cert.pem"),
+  };
+
+  if (!options.key || !options.cert) {
+    console.log(
+      "Key or certificate not found in current directory. Please add key.pem and cert.pem to the current directory."
+    );
+    process.exit(1);
+  }
+
+  https.createServer(options, app).listen(port, () => {
+    console.log(`Server is listening on port ${port}`);
+  });
+} else {
+  app.listen(port, () => {
+    console.log("Listening on port " + port);
+  });
+}
