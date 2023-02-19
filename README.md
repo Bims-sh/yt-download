@@ -1,6 +1,6 @@
 # yt-download
 
-Simple Youtube Downloader using express.js and ytdl-core
+Simple Youtube Downloader using express.js, ffmpeg and ytdl-core
 
 > :warning: This program is for personal use only.  
 > Downloading copyrighted material without permission is against [YouTube's terms of services](https://www.youtube.com/static?template=terms).
