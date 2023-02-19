@@ -4,9 +4,11 @@ import { PassThrough } from "stream";
 import ffmpeg from "fluent-ffmpeg";
 import fs from "fs";
 import https from "https";
+import dotenv from "dotenv";
 
-const useHttps = false;
-const port = 3000;
+dotenv.config();
+
+const port = process.env.PORT || 3000;
 
 const app = express();
 
@@ -50,7 +52,6 @@ app.get("/download", async (req, res) => {
   }
 
   const format = req.query.format || "mp3";
-  const filename = `${videoTitle}.${format}`;
 
   try {
     switch (format) {
@@ -58,14 +59,26 @@ app.get("/download", async (req, res) => {
       case "mp3":
         let audioStream = new PassThrough();
 
-        res.header("Content-Disposition", `attachment; filename="${filename}"`);
+        res.header(
+          "Content-Disposition",
+          `attachment; filename="YTDL-${Date.now()}.mp3"`
+        );
         res.header("Content-Type", "audio/mpeg");
+
+        console.log("Starting ffmpeg...");
+        console.log(videoInfo.videoDetails);
 
         ffmpeg(ytdl(videoUrl, { filter: "audioonly", quality: "highest" }))
           .audioBitrate(128)
           .audioChannels(2)
           .audioCodec("libmp3lame")
           .format("mp3")
+          .outputOptions([
+            "-metadata",
+            `title=${videoTitle}`,
+            "-metadata",
+            `artist=${videoInfo.videoDetails.author.user}`,
+          ])
           .on("error", (err) => {
             console.log(err);
             return res.status(500, "Internal Server Error");
@@ -84,11 +97,21 @@ app.get("/download", async (req, res) => {
       case "mp4":
         let videoStream = new PassThrough();
 
-        res.header("Content-Disposition", `attachment; filename="${filename}"`);
+        res.header(
+          "Content-Disposition",
+          `attachment; filename="YTDL-${Date.now()}.mp4"`
+        );
         ytdl(videoUrl, { quality: "highest" })
           .on("progress", (chunkLength, downloaded, total) => {
             const percent = downloaded / total;
             console.log(Math.floor(percent * 100) + "%");
+          })
+          .on("error", (err) => {
+            console.log(err);
+            return res.status(500, "Internal Server Error");
+          })
+          .on("end", () => {
+            console.log("Finished");
           })
           .pipe(videoStream, { end: true });
         videoStream.pipe(res);
@@ -180,7 +203,7 @@ app.get("/", (req, res) => {
 `);
 });
 
-if (useHttps) {
+if (process.env.HTTPS === "true") {
   const options = {
     key: fs.readFileSync("key.pem"),
     cert: fs.readFileSync("cert.pem"),

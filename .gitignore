@@ -27,3 +27,6 @@ dist-ssr
 # Certificates
 key.pem
 cert.pem
+
+# Config
+.env
