@@ -2,6 +2,8 @@ import express from "express";
 import ytdl from "ytdl-core";
 import { PassThrough } from "stream";
 import ffmpeg from "fluent-ffmpeg";
+import fs from "fs";
+import https from "https";
 
 const useHttps = false;
 const port = 3000;
@@ -179,9 +181,6 @@ app.get("/", (req, res) => {
 });
 
 if (useHttps) {
-  const https = import("https");
-  const fs = import("fs");
-
   const options = {
     key: fs.readFileSync("key.pem"),
     cert: fs.readFileSync("cert.pem"),
