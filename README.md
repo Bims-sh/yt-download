@@ -9,8 +9,9 @@ Simple Youtube Downloader using express.js, ffmpeg and ytdl-core
 
 
 ## Requirements
-- Node.js
-- git
+- [Node.js](https://nodejs.org/en/)
+- [git](https://git-scm.com/)
+- [ffmpeg](https://ffmpeg.org/)
 
 ## Setup
 
